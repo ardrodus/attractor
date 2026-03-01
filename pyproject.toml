@@ -12,6 +12,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+bedrock = [
+    "boto3>=1.35",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",

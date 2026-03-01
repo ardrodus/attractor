@@ -1,0 +1,193 @@
+// Dark Factory: Full Issue-to-Production Pipeline
+//
+// Top-level orchestrator that wires together the Architecture Pipeline,
+// Dark Forge (TDD), and Crucible (validation) into a single end-to-end
+// workflow. Transforms GitHub issues labeled 'backlog' into production-
+// deployed features.
+//
+// Sub-pipelines (hexagon nodes) reference their own DOT files:
+//   - dark_forge.dot  (TDD pipeline)
+//   - crucible.dot    (validation pipeline)
+//
+// Run: attractor run examples/dark_factory.dot --provider bedrock
+//
+// Model stylesheet example (save as dark_factory.styles):
+//   * { model: us.anthropic.claude-sonnet-4-5-v2-0; provider: bedrock; }
+//   #sa_lead { model: us.anthropic.claude-opus-4-6-v1-0; }
+//   #code_reviewer { model: us.anthropic.claude-opus-4-6-v1-0; }
+//   .sa { model: us.anthropic.claude-haiku-4-5-v1-0; }
+
+digraph dark_factory {
+    graph [
+        goal="Transform a GitHub backlog issue into a production-deployed, validated feature"
+    ]
+
+    // ================================================================
+    // ENTRY
+    // ================================================================
+    start [shape=Mdiamond, label="GitHub Issue\n(backlog label)"]
+
+    // ================================================================
+    // SECURITY GATE
+    // ================================================================
+    sentinel [
+        shape=parallelogram,
+        label="Sentinel Security Scan\n(secrets, SAST, deps, images)"
+    ]
+    sentinel_ok [shape=diamond, label="Sentinel\nPass?"]
+    sentinel_fail [shape=Msquare, label="Workspace Rejected"]
+
+    // ================================================================
+    // ARCHITECTURE PIPELINE (10 specialists + SA Lead)
+    // ================================================================
+    sa_compute [
+        shape=box,
+        class="sa",
+        prompt="You are the Compute SA Specialist. Review this issue for compute implications:\n$issue\n\nPrior specialist reviews:\n$cumulative_guidance\n\nAnalyze: ECS tasks, Lambda functions, auto-scaling, container sizing, CPU/memory, cold starts.\nIf N/A to this issue, respond with 'N/A - no compute implications' and move on.\nAppend your analysis to the cumulative guidance document."
+    ]
+
+    sa_storage [
+        shape=box,
+        class="sa",
+        prompt="You are the Storage SA Specialist. Review for storage implications:\n$issue\n$cumulative_guidance\n\nAnalyze: S3 buckets, EFS mounts, backup strategy, data lifecycle, encryption at rest.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_database [
+        shape=box,
+        class="sa",
+        prompt="You are the Database SA Specialist. Review for database implications:\n$issue\n$cumulative_guidance\n\nAnalyze: Aurora schemas, migrations, indexing, query performance, connection pooling, read replicas.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_network [
+        shape=box,
+        class="sa",
+        prompt="You are the Network SA Specialist. Review for networking implications:\n$issue\n$cumulative_guidance\n\nAnalyze: VPC, ALB, DNS, TLS, security groups, CORS, rate limiting.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_analytics [
+        shape=box,
+        class="sa",
+        prompt="You are the Analytics SA Specialist. Review for analytics implications:\n$issue\n$cumulative_guidance\n\nAnalyze: data pipelines, metrics, event tracking, dashboards.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_mlai [
+        shape=box,
+        class="sa",
+        prompt="You are the ML/AI SA Specialist. Review for ML implications:\n$issue\n$cumulative_guidance\n\nAnalyze: model serving, training pipelines, inference endpoints, feature stores.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_devops [
+        shape=box,
+        class="sa",
+        prompt="You are the DevOps SA Specialist. Review for CI/CD implications:\n$issue\n$cumulative_guidance\n\nAnalyze: GitHub Actions workflows, Docker builds, deployment strategy, rollback.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_monitoring [
+        shape=box,
+        class="sa",
+        prompt="You are the Monitoring SA Specialist. Review for observability:\n$issue\n$cumulative_guidance\n\nAnalyze: CloudWatch metrics, alarms, dashboards, log aggregation, tracing.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_integration [
+        shape=box,
+        class="sa",
+        prompt="You are the Integration SA Specialist. Review for integration implications:\n$issue\n$cumulative_guidance\n\nAnalyze: API design, webhooks, external service dependencies, backwards compatibility.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_security [
+        shape=box,
+        class="sa",
+        prompt="You are the Security SA Specialist. Review for security implications:\n$issue\n$cumulative_guidance\n\nAnalyze: IAM policies, OWASP top 10, encryption, secrets management, audit logging.\nAppend analysis to cumulative guidance."
+    ]
+
+    sa_lead [
+        shape=box,
+        prompt="You are the SA Lead. Synthesize all specialist reviews into a final verdict.\n\nIssue: $issue\nCumulative guidance from 10 specialists:\n$cumulative_guidance\n\nYour job:\n1. Identify conflicts or gaps between specialist recommendations\n2. Produce a unified architecture guidance document\n3. Issue verdict: APPROVED (safe to build) or NEEDS_HUMAN (requires human architect)\n\nIf APPROVED, include specific implementation constraints for the engineering team.\nIf NEEDS_HUMAN, explain exactly what needs human judgment and why."
+    ]
+
+    arch_verdict [shape=diamond, label="SA Lead\nVerdict?"]
+    human_arch_review [shape=house, label="Needs Human\nArchitect Review"]
+
+    // ================================================================
+    // DARK FORGE (TDD Pipeline)
+    // ================================================================
+    forge [
+        shape=hexagon,
+        label="Dark Forge\n(TDD Pipeline)",
+        subgraph="dark_forge.dot",
+        max_iterations=3
+    ]
+
+    // ================================================================
+    // CI/CD
+    // ================================================================
+    ci [
+        shape=parallelogram,
+        label="GitHub Actions CI\n(tests, lint, security)"
+    ]
+    deploy_dev [
+        shape=parallelogram,
+        label="Deploy to Dev\n(ECS service update)"
+    ]
+    health_check [shape=diamond, label="Health\nCheck?"]
+    deploy_failed [shape=Msquare, label="Deploy Failed\n→ Obelisk"]
+
+    // ================================================================
+    // CRUCIBLE (External Validation)
+    // ================================================================
+    crucible [
+        shape=hexagon,
+        label="Crucible\n(Browser Validation)",
+        subgraph="crucible.dot",
+        max_iterations=2
+    ]
+    crucible_verdict [shape=diamond, label="Crucible\nVerdict?"]
+
+    // ================================================================
+    // DEPLOYMENT PROMOTION
+    // ================================================================
+    deploy_staging [
+        shape=parallelogram,
+        label="Deploy to Staging"
+    ]
+    prod_gate [shape=house, label="Production\nApproval Gate"]
+    deploy_prod [
+        shape=parallelogram,
+        label="Deploy to Production"
+    ]
+
+    // ================================================================
+    // EXIT
+    // ================================================================
+    done [shape=Msquare, label="Done\n(issue labeled 'done')"]
+
+    // ================================================================
+    // FLOW
+    // ================================================================
+
+    // Entry → Security
+    start -> sentinel -> sentinel_ok
+    sentinel_ok -> sa_compute [label="pass"]
+    sentinel_ok -> sentinel_fail [label="fail"]
+
+    // Architecture Pipeline (sequential, cumulative)
+    sa_compute -> sa_storage -> sa_database -> sa_network -> sa_analytics
+    sa_analytics -> sa_mlai -> sa_devops -> sa_monitoring -> sa_integration
+    sa_integration -> sa_security -> sa_lead -> arch_verdict
+
+    arch_verdict -> forge [label="APPROVED"]
+    arch_verdict -> human_arch_review [label="NEEDS_HUMAN"]
+    human_arch_review -> forge [label="resolved"]
+
+    // Build → CI → Deploy
+    forge -> ci -> deploy_dev -> health_check
+    health_check -> crucible [label="healthy"]
+    health_check -> deploy_failed [label="unhealthy"]
+
+    // Validation → Promotion
+    crucible -> crucible_verdict
+    crucible_verdict -> deploy_staging [label="GO"]
+    crucible_verdict -> forge [label="NO_GO"]
+
+    deploy_staging -> prod_gate -> deploy_prod -> done
+}

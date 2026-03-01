@@ -1,0 +1,38 @@
+/* Dark Factory Model Stylesheet
+ *
+ * Assigns Bedrock models to pipeline nodes.
+ * Specificity: universal (*) < class (.sa) < ID (#sa_lead)
+ *
+ * Usage: attractor run dark_factory.dot --provider bedrock --stylesheet dark_factory.styles
+ */
+
+/* Default: Sonnet for all nodes */
+* {
+    model: us.anthropic.claude-sonnet-4-5-v2-0;
+    provider: bedrock;
+}
+
+/* SA specialists: fast Haiku (most will be N/A) */
+.sa {
+    model: us.anthropic.claude-haiku-4-5-v1-0;
+}
+
+/* SA Lead: Opus for deep synthesis */
+#sa_lead {
+    model: us.anthropic.claude-opus-4-6-v1-0;
+}
+
+/* Code Reviewer: Opus for thorough review */
+#code_reviewer {
+    model: us.anthropic.claude-opus-4-6-v1-0;
+}
+
+/* Design agent: Sonnet 4.6 for structured PRD output */
+#gen_prd {
+    model: us.anthropic.claude-sonnet-4-6-v1-0;
+}
+
+/* Crucible analysis: Sonnet for structured verdict */
+#analyze {
+    model: us.anthropic.claude-sonnet-4-6-v1-0;
+}

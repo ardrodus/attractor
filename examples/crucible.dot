@@ -1,0 +1,93 @@
+// Crucible: External Validation Pipeline
+//
+// Dark Factory's independent validation layer. Tests deployed code
+// against a live dev environment using Playwright browser tests from
+// a separate repository (invisible to engineering agents, preventing
+// test-gaming).
+//
+// Demonstrates: parallel fan-out/fan-in, conditional sharding,
+// shell commands, three-way verdict branching.
+//
+// Run: attractor run examples/crucible.dot --provider bedrock
+
+digraph crucible {
+    graph [
+        goal="Validate deployed code against live dev environment and produce GO/NO_GO/NEEDS_LIVE verdict"
+    ]
+
+    // --- Entry ---
+    start [shape=Mdiamond, label="Deploy to Dev Complete"]
+
+    // --- Test Setup ---
+    load_tests [
+        shape=parallelogram,
+        label="git clone $CRUCIBLE_REPO --depth 1 /tmp/crucible-tests"
+    ]
+
+    detect_scope [
+        shape=box,
+        prompt="Analyze the git diff between $base_sha and $head_sha.\nIdentify which endpoints, pages, and API routes were changed.\nMap each change to the relevant Playwright test files in the crucible test suite.\nOutput: list of test files to run, grouped by feature area."
+    ]
+
+    // --- Sharding Decision ---
+    shard_check [shape=diamond, label="Tests > 20?"]
+
+    // --- Single Container Run ---
+    single_run [
+        shape=parallelogram,
+        label="npx playwright test --config=crucible.config.ts $test_files"
+    ]
+
+    // --- Parallel Sharded Run ---
+    shard_fan_out [shape=component, label="Shard Tests"]
+
+    shard_1 [
+        shape=parallelogram,
+        label="npx playwright test --shard=1/3 --config=crucible.config.ts"
+    ]
+    shard_2 [
+        shape=parallelogram,
+        label="npx playwright test --shard=2/3 --config=crucible.config.ts"
+    ]
+    shard_3 [
+        shape=parallelogram,
+        label="npx playwright test --shard=3/3 --config=crucible.config.ts"
+    ]
+
+    shard_fan_in [shape=tripleoctagon, label="Collect Shard Results"]
+
+    // --- Analysis ---
+    analyze [
+        shape=box,
+        prompt="Analyze the Playwright test results:\n$test_results\n\nCalculate:\n- Total tests, passed, failed, skipped, flaky\n- Pass rate percentage\n- Failure categorization: real bug vs flaky vs environment issue\n- Screenshots/traces for failures\n\nProduce verdict:\n- GO: >= 95% pass rate, zero real bug failures\n- NO_GO: any real bug failure, or pass rate < 95%\n- NEEDS_LIVE: tests require live external services not available in dev\n\nOutput: structured verdict with evidence and failure details."
+    ]
+
+    // --- Verdict Routing ---
+    verdict [shape=diamond, label="Verdict?"]
+
+    go [shape=Msquare, label="GO → Promote to Staging"]
+    no_go [shape=Msquare, label="NO_GO → Back to Forge"]
+    needs_live [shape=house, label="NEEDS_LIVE → Manual Validation"]
+
+    // --- Flow ---
+    start -> load_tests -> detect_scope -> shard_check
+
+    shard_check -> single_run [label="<= 20 tests"]
+    shard_check -> shard_fan_out [label="> 20 tests"]
+
+    shard_fan_out -> shard_1
+    shard_fan_out -> shard_2
+    shard_fan_out -> shard_3
+
+    shard_1 -> shard_fan_in
+    shard_2 -> shard_fan_in
+    shard_3 -> shard_fan_in
+
+    single_run -> analyze
+    shard_fan_in -> analyze
+
+    analyze -> verdict
+    verdict -> go [label="GO"]
+    verdict -> no_go [label="NO_GO"]
+    verdict -> needs_live [label="NEEDS_LIVE"]
+}

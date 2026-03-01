@@ -1,0 +1,91 @@
+// Dark Forge: TDD Pipeline
+//
+// The build engine of Dark Factory. Takes an approved issue through
+// PRD generation, story scheduling, and the Test Writer → Feature Writer →
+// Code Reviewer TDD loop. Each story produces a merged PR.
+//
+// Demonstrates: supervisor loops, conditional branching, tool confinement,
+// information gap (test writer and feature writer are isolated).
+//
+// Run: attractor run examples/dark_forge.dot --provider bedrock
+
+digraph dark_forge {
+    graph [
+        goal="Transform an architecture-approved GitHub issue into merged PRs via TDD"
+    ]
+
+    // --- Entry ---
+    start [shape=Mdiamond, label="Approved Issue"]
+
+    // --- PRD Generation ---
+    gen_prd [
+        shape=box,
+        prompt="You are the Design Agent. Given this GitHub issue: $issue\n\nGenerate a complete Product Requirements Document including:\n1. Technical Design Document\n2. API Contract (endpoints, request/response schemas)\n3. Database Schema Spec (migrations, indexes)\n4. Interface Definitions\n\nOutput as structured markdown sections. Each user story must have clear acceptance criteria."
+    ]
+
+    // --- Story Scheduling ---
+    schedule_stories [
+        shape=box,
+        prompt="Parse the PRD into ordered user stories. Each story must be independently implementable. Output as JSON array with fields: id, title, description, acceptance_criteria, depends_on.\n\nPRD:\n$gen_prd"
+    ]
+
+    // --- Per-Story TDD Loop (supervisor retries whole block) ---
+    story_loop [
+        shape=hexagon,
+        label="For Each Story",
+        max_iterations=5
+    ]
+
+    // --- Stage 1: Test Writer (isolated to tests/) ---
+    test_writer [
+        shape=box,
+        prompt="You are the Test Writer. You have access ONLY to the tests/ directory.\n\nWrite failing tests for this user story:\n$current_story\n\nDesign contract:\n$gen_prd\n\nRules:\n- Write pytest tests that clearly express the acceptance criteria\n- Tests MUST fail (the feature doesn't exist yet)\n- Include edge cases and error scenarios\n- Do NOT implement any production code\n- Output test files only"
+    ]
+
+    // --- Stage 2: Feature Writer (isolated to src/, blind to tests) ---
+    feature_writer [
+        shape=box,
+        prompt="You are the Feature Writer. You have access to src/ and lib/ ONLY.\nYou CANNOT see the test source code.\n\nImplement the feature for this user story:\n$current_story\n\nDesign artifacts:\n$gen_prd\n\nRules:\n- Implement against the design spec, NOT by reverse-engineering tests\n- Run ./run-tests.sh to validate (black-box, you see pass/fail only)\n- Production-quality code with proper error handling\n- Follow existing code conventions"
+    ]
+
+    // --- Run Tests ---
+    run_tests [
+        shape=parallelogram,
+        label="./run-tests.sh"
+    ]
+    tests_pass [shape=diamond, label="Tests Pass?"]
+
+    // --- Stage 3: Code Reviewer (read-only) ---
+    code_reviewer [
+        shape=box,
+        prompt="You are the Code Reviewer. You have READ-ONLY access to the entire repository.\n\nReview the implementation for:\n- Correctness against design spec\n- Code quality and conventions\n- Security vulnerabilities (OWASP top 10)\n- Error handling completeness\n- Test coverage adequacy\n\nProvide verdict: approved | changes_requested | human_review_required\nIf changes_requested, provide specific actionable feedback."
+    ]
+    review_verdict [shape=diamond, label="Review\nVerdict?"]
+
+    // --- Feedback Loop ---
+    feedback_check [shape=diamond, label="Rounds < 3?"]
+
+    // --- Outputs ---
+    create_pr [
+        shape=parallelogram,
+        label="gh pr create --title '$current_story.title' --body '$review_summary'"
+    ]
+    escalate [shape=house, label="Human Review Required"]
+    done [shape=Msquare, label="PR Created"]
+
+    // --- Flow ---
+    start -> gen_prd -> schedule_stories -> story_loop
+    story_loop -> test_writer -> feature_writer -> run_tests -> tests_pass
+
+    tests_pass -> code_reviewer [label="pass"]
+    tests_pass -> feature_writer [label="fail (retry)"]
+
+    code_reviewer -> review_verdict
+    review_verdict -> create_pr [label="approved"]
+    review_verdict -> feedback_check [label="changes_requested"]
+
+    feedback_check -> feature_writer [label="yes"]
+    feedback_check -> escalate [label="no (>=3 rounds)"]
+
+    create_pr -> done
+}

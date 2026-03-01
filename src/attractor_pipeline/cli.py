@@ -42,7 +42,19 @@ def main() -> None:
         "--provider",
         type=str,
         default=None,
-        help="LLM provider (anthropic, openai, gemini). Auto-detected from model.",
+        help="LLM provider (anthropic, openai, gemini, bedrock). Auto-detected from model.",
+    )
+    run_parser.add_argument(
+        "--aws-profile",
+        type=str,
+        default=None,
+        help="AWS profile name for Bedrock authentication (overrides AWS_PROFILE)",
+    )
+    run_parser.add_argument(
+        "--aws-region",
+        type=str,
+        default=None,
+        help="AWS region for Bedrock (default: us-east-1)",
     )
     run_parser.add_argument(
         "--model",
@@ -201,7 +213,11 @@ async def _cmd_run(args: argparse.Namespace) -> None:
 
     # Auto-detect provider from model name
     if provider is None:
-        if model.startswith("claude"):
+        if model.startswith(("us.anthropic", "anthropic.claude")):
+            provider = "bedrock"
+        elif model.startswith("bedrock-"):
+            provider = "bedrock"
+        elif model.startswith("claude"):
             provider = "anthropic"
         elif model.startswith(("gpt", "o1", "o3", "o4")):
             provider = "openai"
@@ -214,22 +230,36 @@ async def _cmd_run(args: argparse.Namespace) -> None:
             )
             provider = "anthropic"
 
-    # Get API key
-    key_env_map = {
-        "anthropic": "ANTHROPIC_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "gemini": "GOOGLE_API_KEY",
-    }
-    env_var = key_env_map.get(provider, "ANTHROPIC_API_KEY")
-    api_key = os.environ.get(env_var)
-    if not api_key:
-        print(f"Error: Set {env_var} environment variable")
-        sys.exit(1)
-
     # Set up LLM client
     client = Client()
-    adapter = _create_adapter(provider, api_key)
-    client.register_adapter(provider, adapter)
+
+    if provider == "bedrock":
+        # Bedrock uses boto3 credential chain (SSO, profile, env, instance role)
+        adapter = _create_bedrock_adapter(args)
+        client.register_adapter("bedrock", adapter)
+    else:
+        # API key providers (anthropic, openai, gemini)
+        key_env_map = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "gemini": "GOOGLE_API_KEY",
+        }
+        env_var = key_env_map.get(provider, "ANTHROPIC_API_KEY")
+        api_key = os.environ.get(env_var)
+        if not api_key:
+            print(f"Error: Set {env_var} environment variable")
+            sys.exit(1)
+        adapter = _create_adapter(provider, api_key)
+        client.register_adapter(provider, adapter)
+
+    # Also register Bedrock as a secondary provider if AWS creds are available
+    # (allows model stylesheets to route some nodes to Bedrock, others to API key)
+    if provider != "bedrock":
+        try:
+            bedrock_adapter = _create_bedrock_adapter(args)
+            client.register_adapter("bedrock", bedrock_adapter)
+        except Exception:
+            pass  # No AWS credentials available, skip
     print(f"Provider: {provider} ({model})")
 
     # Set up execution environment
@@ -328,6 +358,19 @@ async def _cmd_run(args: argparse.Namespace) -> None:
         print("Pipeline completed successfully.")
     else:
         sys.exit(1)
+
+
+def _create_bedrock_adapter(args: argparse.Namespace) -> Any:
+    """Create a Bedrock adapter from CLI args and environment."""
+    from attractor_llm.adapters.bedrock import BedrockAdapter, BedrockConfig
+
+    region = getattr(args, "aws_region", None) or os.environ.get(
+        "AWS_DEFAULT_REGION", os.environ.get("AWS_REGION", "us-east-1")
+    )
+    profile = getattr(args, "aws_profile", None) or os.environ.get("AWS_PROFILE")
+
+    config = BedrockConfig(region=region, profile_name=profile)
+    return BedrockAdapter(config)
 
 
 def _create_adapter(provider: str, api_key: str) -> Any:

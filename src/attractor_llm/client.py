@@ -104,6 +104,7 @@ class Client:
         - OPENAI_API_KEY → OpenAI adapter
         - ANTHROPIC_API_KEY → Anthropic adapter
         - GEMINI_API_KEY or GOOGLE_API_KEY → Gemini adapter
+        - AWS_PROFILE or AWS_DEFAULT_REGION → Bedrock adapter (boto3 credential chain)
 
         Args:
             **kwargs: Passed to Client.__init__ (e.g., retry_policy).
@@ -132,6 +133,21 @@ class Client:
             from attractor_llm.adapters.gemini import GeminiAdapter
 
             client.register_adapter("gemini", GeminiAdapter(ProviderConfig(api_key=gemini_key)))
+
+        # Bedrock: detect via AWS_PROFILE, AWS_DEFAULT_REGION, or boto3 credential chain
+        aws_profile = os.environ.get("AWS_PROFILE")
+        aws_region = os.environ.get("AWS_DEFAULT_REGION") or os.environ.get("AWS_REGION")
+        if aws_profile or aws_region:
+            try:
+                from attractor_llm.adapters.bedrock import BedrockAdapter, BedrockConfig
+
+                bedrock_config = BedrockConfig(
+                    region=aws_region or "us-east-1",
+                    profile_name=aws_profile,
+                )
+                client.register_adapter("bedrock", BedrockAdapter(bedrock_config))
+            except Exception:
+                pass  # boto3 not installed or credentials unavailable
 
         return client
 

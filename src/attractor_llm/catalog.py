@@ -38,6 +38,16 @@ MODEL_CATALOG: list[ModelInfo] = [
         aliases=("opus", "claude-opus", "opus-4-6"),
     ),
     ModelInfo(
+        id="claude-sonnet-4-6",
+        provider="anthropic",
+        display_name="Claude Sonnet 4.6",
+        context_window=200_000,
+        supports_tools=True,
+        supports_vision=True,
+        supports_reasoning=True,
+        aliases=("sonnet-4-6",),
+    ),
+    ModelInfo(
         id="claude-sonnet-4-5",
         provider="anthropic",
         display_name="Claude Sonnet 4.5",
@@ -46,6 +56,47 @@ MODEL_CATALOG: list[ModelInfo] = [
         supports_vision=True,
         supports_reasoning=True,
         aliases=("sonnet", "claude-sonnet", "sonnet-4-5"),
+    ),
+    # AWS Bedrock models (cross-region inference IDs)
+    ModelInfo(
+        id="us.anthropic.claude-opus-4-6-v1-0",
+        provider="bedrock",
+        display_name="Claude Opus 4.6 (Bedrock)",
+        context_window=200_000,
+        supports_tools=True,
+        supports_vision=True,
+        supports_reasoning=True,
+        aliases=("bedrock-opus", "bedrock-opus-4-6"),
+    ),
+    ModelInfo(
+        id="us.anthropic.claude-sonnet-4-6-v1-0",
+        provider="bedrock",
+        display_name="Claude Sonnet 4.6 (Bedrock)",
+        context_window=200_000,
+        supports_tools=True,
+        supports_vision=True,
+        supports_reasoning=True,
+        aliases=("bedrock-sonnet-4-6",),
+    ),
+    ModelInfo(
+        id="us.anthropic.claude-sonnet-4-5-v2-0",
+        provider="bedrock",
+        display_name="Claude Sonnet 4.5 (Bedrock)",
+        context_window=200_000,
+        supports_tools=True,
+        supports_vision=True,
+        supports_reasoning=True,
+        aliases=("bedrock-sonnet", "bedrock-sonnet-4-5"),
+    ),
+    ModelInfo(
+        id="us.anthropic.claude-haiku-4-5-v1-0",
+        provider="bedrock",
+        display_name="Claude Haiku 4.5 (Bedrock)",
+        context_window=200_000,
+        supports_tools=True,
+        supports_vision=True,
+        supports_reasoning=False,
+        aliases=("bedrock-haiku", "bedrock-haiku-4-5"),
     ),
     ModelInfo(
         id="gpt-5.2",
@@ -103,6 +154,7 @@ _CATALOG_INDEX: dict[str, ModelInfo] = {m.id: m for m in MODEL_CATALOG}
 
 _DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-sonnet-4-5",
+    "bedrock": "us.anthropic.claude-sonnet-4-5-v2-0",
     "openai": "gpt-5.2",
     "gemini": "gemini-3-flash-preview",
 }
