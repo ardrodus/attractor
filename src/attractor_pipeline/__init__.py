@@ -57,6 +57,7 @@ from attractor_pipeline.handlers import (
     register_default_handlers,
 )
 from attractor_pipeline.parser import parse_dot
+from attractor_pipeline.sdk import ExecuteConfig, execute
 from attractor_pipeline.stylesheet import (
     Stylesheet,
     apply_stylesheet,
@@ -134,4 +135,7 @@ __all__ = [
     "InterviewCompleted",
     "InterviewTimeout",
     "CheckpointSaved",
+    # SDK (high-level API)
+    "execute",
+    "ExecuteConfig",
 ]
